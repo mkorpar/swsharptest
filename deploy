@@ -1,0 +1,19 @@
+#!/bin/bash
+
+DIR=$(dirname $0)
+cd $DIR/../swsharp
+
+git pull
+
+SRC=swsharp-src.zip
+WIN=swsharp-win-vs2010.zip
+
+rm -f $SRC $WIN
+
+git archive HEAD --prefix=swsharp/ --format=zip -o $SRC
+make
+zip $WIN swsharpwin -r
+
+scp $SRC $WIN mkorpar@frs.sourceforge.net:/home/frs/project/swsharp/
+
+rm -f $SRC $WIN
