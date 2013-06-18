@@ -30,10 +30,11 @@ DIR=$(dirname $0)
 
 time=/usr/bin/time
 
-swsharpn=$DIR/../bin/swsharpn
-swsharpout=$DIR/../bin/swsharpout
+swsharpn=$DIR/../swsharp/bin/swsharpn
+swsharpout=$DIR/../swsharp/bin/swsharpout
 
 printf "%-13s %-13s | " "query" "target"
+printf "%-13s %-13s | " "queryLen" "targetLen"
 printf "%-20s %-20s %-20s %-10s | " "solve" "find" "recn" "total"
 printf "%-10s | " "mem (MB)"
 printf "%-14s | " "prunned"
@@ -64,7 +65,7 @@ do
     if [ $? -ne 0 ]; then cleanup; exit -1; fi
     
     time_solve1=$(grep "STOP:src/sw_end_data_gpu.cu" $out | cut -d " " -f 2 | paste -sd ",")
-    time_find1=$(grep "STOP:src/sw_find_start_gpu.cu" $out | cut -d " " -f 2 | paste -sd ",")
+    time_find1=$(grep "STOP:src/nw_find_score_gpu.cu" $out | cut -d " " -f 2 | paste -sd ",")
     time_recn1=$(grep "STOP:src/reconstruct.c" $out | cut -d " " -f 2 | paste -sd ",")
     time_total1=$(cat $tout | cut -d" " -f1)
     memory=$(echo "scale = 3; $(cat $tout | cut -d " " -f2) / 1024.0" | bc)
@@ -72,22 +73,29 @@ do
 
     $swsharpout -i $dump --outfmt 'stat' --out $stat
     if [ $? -ne 0 ]; then cleanup; exit -1; fi
-    
-    query_length=$(grep "length = " $stat | head -n 1 | awk '{print $4}')
-    target_length=$(grep "length = " $stat | tail -n 1 | awk '{print $4}')
+
+    query_length=$(grep "Query length" $stat | awk '{print $4}')
+    target_length=$(grep "Target length" $stat | awk '{print $4}')
     length=$(grep "Length" $stat | cut -d " " -f 3)
     identity=$(grep "Identity" $stat | awk '{print $3}' | cut -d "/" -f 1 )
     similarity=$(grep "Similarity" $stat | awk '{print $3}' | cut -d "/" -f 1)
     gap=$(grep "Gaps" $stat | awk '{print $3}' | cut -d "/" -f 1)
-    scor=$(grep "Score" $stat | cut -d " " -f 3)
-    query_start=$(grep "Query" $stat | cut -d " " -f 3 | tr -d "(,")
-    query_end=$(grep "Query" $stat | cut -d " " -f 4 | tr -d ")")
-    target_start=$(grep "Target" $stat | cut -d " " -f 3 | tr -d "(,")
-    target_end=$(grep "Target" $stat | cut -d " " -f 4 | tr -d ")")
+    scor=$(grep "Score:" $stat | cut -d " " -f 3)
+    query_start=$(grep "Query:" $stat | cut -d " " -f 3 | tr -d "(,")
+    query_end=$(grep "Query:" $stat | cut -d " " -f 4 | tr -d ")")
+    target_start=$(grep "Target:" $stat | cut -d " " -f 3 | tr -d "(,")
+    target_end=$(grep "Target:" $stat | cut -d " " -f 4 | tr -d ")")
 
-    echo $query_length $target_length
+    printf "%-13s %-13s | " $n1 $n2
+    printf "%-13s %-13s | " $query_length $target_length
+    printf "%-20s %-20s %-20s %-10s | " $time_solve1 $time_find1 $time_recn1 $time_total1
+    printf "%-10s | " $memory
+    printf "%-14s | " $pruned
+    printf "(%9s,%9s) (%9s,%9s) | " $query_start $target_start $query_end $target_end
+    printf "%-13s | " $scor
+    printf "%-13s %-13s %-13s %-13s" $length $identity $similarity $gap
     echo
-    
+
 done < $input
 
 cleanup
