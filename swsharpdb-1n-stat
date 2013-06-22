@@ -1,0 +1,122 @@
+#!/bin/bash
+
+trap control_c SIGINT
+
+cleanup()
+{
+    rm -f $tout
+    rm -f $out
+}
+
+control_c()
+# run if user hits control-c
+{
+    cleanup
+    exit $?
+}
+
+if [ $# -lt 2 ]
+then
+    echo "usage: $0 <query list> <database> [swsharpdb args...]"
+    exit -1
+fi
+
+input=$1
+db=$2
+shift
+shift
+args=$@
+
+DIR=$(dirname $0)
+
+time=/usr/bin/time
+
+swsharpdb="$DIR/../swsharp/bin/swsharpdb --outfmt bm8 --max-aligns 500 --evalue 10 $args"
+blastp="$DIR/../ncbi-blast-2.2.27+/bin/blastp -outfmt 6 -max_target_seqs 500 -evalue 10 -gapopen 10 -gapextend 2 -matrix BLOSUM62 -num_threads 4"
+gpublast="$DIR/../ncbi-blast-2.2.26+-src/c++/GCC480-Release64/bin/blastp -outfmt 6 -max_target_seqs 500 -evalue 10 -gapopen 10 -gapextend 2 -matrix BLOSUM62 -gpu T"
+ssearch="$DIR/../fasta-36.3.5e/bin/ssearch36 -s BL62 -f 10 -g 2 -E 10 -b 100 -d 500 -m 8"
+cudasw="$DIR/../cudasw++v2.0.10/cudasw -mat blosum62 -gapo 10 -gape 2 -topscore_num 500"
+
+out=$(mktemp)
+tout=$(mktemp)
+
+dblen=$(grep ">" $db -v | tr -d '[:space:]' |  wc -c)
+
+printf "%-13s %-13s | " "" ""
+printf "%-10s %-10s %-10s | " "swsharpdb" "" ""
+printf "%-10s %-10s %-10s | " "blastp" "" ""
+printf "%-10s %-10s %-10s | " "gpublast" "" ""
+printf "%-10s %-10s %-10s | " "ssearch" "" ""
+printf "%-10s %-10s %-10s | " "cudasw" "" ""
+echo
+
+printf "%-13s %-13s | " "query" "length"
+printf "%-10s %-10s %-10s | " "time" "gcups" "aligns"
+printf "%-10s %-10s %-10s | " "time" "gcups" "aligns"
+printf "%-10s %-10s %-10s | " "time" "gcups" "aligns"
+printf "%-10s %-10s %-10s | " "time" "gcups" "aligns"
+printf "%-10s %-10s %-10s | " "time" "gcups" "aligns"
+echo
+
+while read line
+do
+    query=$line
+    qlen=$(grep ">" $line -v | tr -d '[:space:]' |  wc -c)
+    
+    queryn=$(basename $query | cut -d"." -f1)
+    dbn=$(basename $db)
+    
+    echo "Processing:" $queryn $dbn 1>&2
+   
+    $time -o $tout -f "%e" $swsharpdb -i $query -j $db --out $out > /dev/null 2>&1
+    # if [ $? -ne 0 ]; then cleanup; exit -1; fi
+    t1=$(cat $tout)
+    a1=$(wc -l $out | cut -d" " -f 1)
+    
+    echo $t1 $a1
+    
+    $time -o $tout -f "%e" $blastp -query $query -db $db -out $out > /dev/null 2>&1
+    # if [ $? -ne 0 ]; then cleanup; exit -1; fi
+    t2=$(cat $tout)
+    a2=$(wc -l $out | cut -d" " -f 1)
+
+    echo $t2 $a2
+    
+    $time -o $tout -f "%e" $gpublast -query $query -db $db -out $out > /dev/null 2>&1
+    # if [ $? -ne 0 ]; then cleanup; exit -1; fi
+    t3=$(cat $tout)
+    a3=$(wc -l $out | cut -d" " -f 1)
+
+    echo $t3 $a3
+    
+    $time -o $tout -f "%e" $ssearch $query $db -out $out > /dev/null 2>&1
+    # if [ $? -ne 0 ]; then cleanup; exit -1; fi
+    t4=$(cat $tout)
+    a4=$(tail -n+4 $out | wc -l | cut -d" " -f 1)
+
+    echo $t4 $a4
+    
+    $time -o $tout -f "%e" $cudasw -query $query -db $db > $out
+    # if [ $? -ne 0 ]; then cleanup; exit -1; fi
+    t5=$(cat $tout)
+    a5=$(grep "\----------Display" $out -A 504 | tail -n+2 | head -n-3 | wc -l | cut -d" " -f 1)
+  
+    echo $t5 $a5  
+    
+    g1=$(echo $qlen $dblen $t1 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+    g2=$(echo $qlen $dblen $t2 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+    g3=$(echo $qlen $dblen $t3 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+    g4=$(echo $qlen $dblen $t4 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+    g5=$(echo $qlen $dblen $t5 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+    
+    printf "%-13s %-13s | " $queryn $qlen
+    printf "%-10s %-10s %-10s | " $t1 $g1 $a1
+    printf "%-10s %-10s %-10s | " $t2 $g2 $a2
+    printf "%-10s %-10s %-10s | " $t3 $g3 $a3
+    printf "%-10s %-10s %-10s | " $t4 $g4 $a4
+    printf "%-10s %-10s %-10s | " $t5 $g5 $a5
+    echo
+
+done < $input
+
+cleanup
