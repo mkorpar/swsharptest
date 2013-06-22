@@ -69,35 +69,59 @@ do
     echo "Processing:" $queryn $dbn 1>&2
    
     $time -o $tout -f "%e" $swsharpdb -i $query -j $db --out $out > /dev/null 2>&1
-    if [ $? -ne 0 ]; then cleanup; exit -1; fi
-    t1=$(cat $tout)
-    a1=$(wc -l $out | cut -d" " -f 1)
+    if [ $(grep "Command exited with non-zero status"  $tout -c) -eq 1 ]; then 
+        t1="nan"
+        g1="nan"
+        a1="nan"
+    else
+        t1=$(cat $tout)
+        g1=$(echo $qlen $dblen $t1 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+        a1=$(wc -l $out | cut -d" " -f 1)
+    fi
     
     $time -o $tout -f "%e" $blastp -query $query -db $db -out $out > /dev/null 2>&1
-    if [ $? -ne 0 ]; then cleanup; exit -1; fi
-    t2=$(cat $tout)
-    a2=$(wc -l $out | cut -d" " -f 1)
+    if [ $(grep "Command exited with non-zero status"  $tout -c) -eq 1 ]; then 
+        t2="nan"
+        g2="nan"
+        a2="nan"
+    else
+        t2=$(cat $tout)
+        g2=$(echo $qlen $dblen $t2 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+        a2=$(wc -l $out | cut -d" " -f 1)
+    fi
 
     $time -o $tout -f "%e" $gpublast -query $query -db $db -out $out > /dev/null 2>&1
-    if [ $? -ne 0 ]; then cleanup; exit -1; fi
-    t3=$(cat $tout)
-    a3=$(wc -l $out | cut -d" " -f 1)
+    if [ $(grep "Command exited with non-zero status"  $tout -c) -eq 1 ]; then 
+        t3="nan"
+        g3="nan"
+        a3="nan"
+    else
+        t3=$(cat $tout)
+        g3=$(echo $qlen $dblen $t3 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+        a3=$(wc -l $out | cut -d" " -f 1)
+    fi
 
     $time -o $tout -f "%e" $ssearch $query $db -out $out > /dev/null 2>&1
-    t4=$(cat $tout)
-    if [ $? -ne 0 ]; then t4="99999999999"; fi
-    a4=$(tail -n+4 $out | wc -l | cut -d" " -f 1)
-
-    $time -o $tout -f "%e" $cudasw -query $query -db $db > $out
-    if [ $? -ne 0 ]; then cleanup; exit -1; fi
-    t5=$(cat $tout)
-    a5=$(grep "\----------Display" $out -A 504 | tail -n+2 | head -n-3 | wc -l | cut -d" " -f 1)
+    if [ $(grep "Command exited with non-zero status"  $tout -c) -eq 1 ]; then 
+        t4="nan"
+        g4="nan"
+        a4="nan"
+    else
+        t4=$(cat $tout)
+        g4=$(echo $qlen $dblen $t4 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+        a4=$(tail -n+4 $out | wc -l | cut -d" " -f 1)
+    fi
     
-    g1=$(echo $qlen $dblen $t1 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
-    g2=$(echo $qlen $dblen $t2 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
-    g3=$(echo $qlen $dblen $t3 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
-    g4=$(echo $qlen $dblen $t4 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
-    g5=$(echo $qlen $dblen $t5 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+    $time -o $tout -f "%e" $cudasw -query $query -db $db > $out
+    if [ $(grep "Command exited with non-zero status"  $tout -c) -eq 1 ]; then 
+        t5="nan"
+        g5="nan"
+        a5="nan"
+    else
+        t5=$(cat $tout)
+        g5=$(echo $qlen $dblen $t5 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
+        a5=$(grep "\----------Display" $out -A 504 | tail -n+2 | head -n-3 | wc -l | cut -d" " -f 1)
+    fi
     
     printf "%-13s %-13s | " $queryn $qlen
     printf "%-10s %-10s %-10s | " $t1 $g1 $a1
