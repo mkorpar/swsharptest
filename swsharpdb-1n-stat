@@ -69,39 +69,29 @@ do
     echo "Processing:" $queryn $dbn 1>&2
    
     $time -o $tout -f "%e" $swsharpdb -i $query -j $db --out $out > /dev/null 2>&1
-    # if [ $? -ne 0 ]; then cleanup; exit -1; fi
+    if [ $? -ne 0 ]; then cleanup; exit -1; fi
     t1=$(cat $tout)
     a1=$(wc -l $out | cut -d" " -f 1)
     
-    echo $t1 $a1
-    
     $time -o $tout -f "%e" $blastp -query $query -db $db -out $out > /dev/null 2>&1
-    # if [ $? -ne 0 ]; then cleanup; exit -1; fi
+    if [ $? -ne 0 ]; then cleanup; exit -1; fi
     t2=$(cat $tout)
     a2=$(wc -l $out | cut -d" " -f 1)
 
-    echo $t2 $a2
-    
     $time -o $tout -f "%e" $gpublast -query $query -db $db -out $out > /dev/null 2>&1
-    # if [ $? -ne 0 ]; then cleanup; exit -1; fi
+    if [ $? -ne 0 ]; then cleanup; exit -1; fi
     t3=$(cat $tout)
     a3=$(wc -l $out | cut -d" " -f 1)
 
-    echo $t3 $a3
-    
     $time -o $tout -f "%e" $ssearch $query $db -out $out > /dev/null 2>&1
-    # if [ $? -ne 0 ]; then cleanup; exit -1; fi
     t4=$(cat $tout)
+    if [ $? -ne 0 ]; then t4="99999999999"; fi
     a4=$(tail -n+4 $out | wc -l | cut -d" " -f 1)
 
-    echo $t4 $a4
-    
     $time -o $tout -f "%e" $cudasw -query $query -db $db > $out
-    # if [ $? -ne 0 ]; then cleanup; exit -1; fi
+    if [ $? -ne 0 ]; then cleanup; exit -1; fi
     t5=$(cat $tout)
     a5=$(grep "\----------Display" $out -A 504 | tail -n+2 | head -n-3 | wc -l | cut -d" " -f 1)
-  
-    echo $t5 $a5  
     
     g1=$(echo $qlen $dblen $t1 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
     g2=$(echo $qlen $dblen $t2 | awk '{printf "%.2f", ($1 * $2) / ($3 * 1000000000.0)}')
