@@ -1,0 +1,101 @@
+#!/bin/bash
+
+trap control_c SIGINT
+
+cleanup()
+{
+    rm -f $tout
+    rm -f $out
+}
+
+control_c()
+# run if user hits control-c
+{
+    cleanup
+    exit $?
+}
+
+if [ $# -lt 1 ]
+then
+    echo "usage: $0 <database> [swsharpdb args...]"
+    exit -1
+fi
+
+db=$1
+shift
+args=$@
+
+DIR=$(dirname $0)
+
+time=/usr/bin/time
+
+swsharpdb="$DIR/../swsharp/bin/swsharpdb --outfmt bm8 --max-aligns 500 --evalue 10"
+blastp="$DIR/../ncbi-blast-2.2.27+/bin/blastp -outfmt 6 -max_target_seqs 500 -evalue 10 -gapopen 10 -gapextend 2 -matrix BLOSUM62 -num_threads 4"
+gpublast="$DIR/../ncbi-blast-2.2.26+-src/c++/GCC480-Release64/bin/blastp -outfmt 6 -max_target_seqs 500 -evalue 10 -gapopen 10 -gapextend 2 -matrix BLOSUM62 -gpu T"
+ssearch="$DIR/../fasta-36.3.5e/bin/ssearch36 -s BL62 -f 10 -g 2 -E 10 -b 100 -d 500 -m 8"
+
+out=$(mktemp)
+tout=$(mktemp)
+
+dblen=$(grep ">" $db -v | tr -d '[:space:]' |  wc -c)
+
+printf "%-13s | %-10s %-10s %-10s | " "algorithm" "time" "gcups" "aligns"
+echo
+
+$time -o $tout -f "%e" $swsharpdb -i $db -j $db --out $out > /dev/null 2>&1
+if [ $(grep "Command exited with non-zero status"  $tout -c) -eq 1 ]; then 
+    t1="nan"
+    g1="nan"
+    a1="nan"
+else
+    t1=$(cat $tout)
+    g1=$(echo $dblen $t1 | awk '{printf "%.2f", ($1 * $1) / ($2 * 1000000000.0)}')
+    a1=$(wc -l $out | cut -d" " -f 1)
+fi
+
+printf "%-13s | %-10s %-10s %-10s | " "swsharpdb" $t1 $g1 $a1
+echo
+
+$time -o $tout -f "%e" $blastp -query $db -db $db -out $out 
+if [ $(grep "Command exited with non-zero status"  $tout -c) -eq 1 ]; then 
+    t2="nan"
+    g2="nan"
+    a2="nan"
+else
+    t2=$(cat $tout)
+    g2=$(echo $dblen $t2 | awk '{printf "%.2f", ($1 * $1) / ($2 * 1000000000.0)}')
+    a2=$(wc -l $out | cut -d" " -f 1)
+fi
+
+printf "%-13s | %-10s %-10s %-10s | " "blastp" $t2 $g2 $a2
+echo
+
+$time -o $tout -f "%e" $gpublast -query $db -db $db -out $out > /dev/null 2>&1
+if [ $(grep "Command exited with non-zero status"  $tout -c) -eq 1 ]; then 
+    t3="nan"
+    g3="nan"
+    a3="nan"
+else
+    t3=$(cat $tout)
+    g3=$(echo $dblen $t3 | awk '{printf "%.2f", ($1 * $1) / ($2 * 1000000000.0)}')
+    a3=$(wc -l $out | cut -d" " -f 1)
+fi
+
+printf "%-13s | %-10s %-10s %-10s | " "gpublast" $t3 $g3 $a3
+echo
+
+$time -o $tout -f "%e" $ssearch $db $db > $out
+if [ $(grep "Command exited with non-zero status"  $tout -c) -eq 1 ]; then 
+    t4="nan"
+    g4="nan"
+    a4="nan"
+else
+    t4=$(cat $tout)
+    g4=$(echo $dblen $t4 | awk '{printf "%.2f", ($1 * $1) / ($2 * 1000000000.0)}')
+    a4=$(cat $out | grep -E "^#" -v | wc -l | cut -d" " -f 1)
+fi
+
+printf "%-13s | %-10s %-10s %-10s | " "ssearch" $t4 $g4 $a4
+echo
+
+cleanup
